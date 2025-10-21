@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مُعلِّم الرياضيات ومُحلّل الخطوات بالذكاء الاصطناعي</title>
+    <!-- Load Tailwind CSS for a modern, responsive app look -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load MathJax for rendering the LaTeX-style math formulas correctly -->
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Soft blue-gray background */
+            text-align: right; /* Ensure text alignment is correct for RTL */
+        }
+        /* Style for the pre-formatted markdown steps */
+        .markdown-output pre {
+            background-color: #f7f9fc;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            text-align: right;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4" dir="rtl">
+
+    <!-- Application Container -->
+    <div class="w-full max-w-2xl bg-white p-6 md:p-10 rounded-2xl shadow-2xl border border-gray-100">
+
+        <h1 class="text-3xl font-extrabold text-indigo-700 mb-2 border-b pb-2">
+            مُعلِّم الرياضيات ومُحلّل الخطوات بالذكاء الاصطناعي
+        </h1>
+        <p class="text-gray-500 mb-6">
+            اكتب أي مسألة رياضية أدناه. سيقوم الذكاء الاصطناعي بحلها وتقديم شرح خطوة بخطوة مع الترميز الرياضي الصحيح.
+        </p>
+
+        <!-- Step 1: Input Area -->
+        <div class="mb-6 p-4 bg-indigo-50 rounded-lg border-indigo-200 border-2 border-dashed">
+            <label for="math-query" class="block text-lg font-semibold text-indigo-700 mb-2">
+                سؤالك الرياضي:
+            </label>
+            <textarea id="math-query" rows="4" placeholder="مثال: ما هو مشتق $f(x) = x^2 + 3x - 5$؟ أو: حل قيمة $x$ في $2x + 5 = 15$."
+                class="w-full p-3 border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out text-right"></textarea>
+        </div>
+
+        <!-- Solve Button -->
+        <button id="solve-button" onclick="solveAndExplain()"
+                class="w-full py-3 bg-indigo-600 text-white font-bold text-xl rounded-lg shadow-md hover:bg-indigo-700 transition duration-300 ease-in-out disabled:opacity-50">
+            احصل على الحل والخطوات
+        </button>
+
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="mt-4 text-center hidden">
+            <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] text-indigo-500 motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
+                <span class="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">...</span>
+            </div>
+            <p class="text-indigo-600 mt-2">يتم الحل وإنشاء الشرح...</p>
+        </div>
+
+        <!-- Step 3: Result Display -->
+        <div id="result-box" class="mt-8 p-6 bg-white border-2 border-green-300 rounded-xl shadow-lg hidden">
+            
+            <h2 class="text-2xl font-bold text-green-700 mb-3 flex items-center border-b pb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 ml-2" viewBox="0 0 20 20" fill="currentColor" style="transform: scaleX(-1);">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                الحل النهائي:
+            </h2>
+            <div id="solution-output" class="text-4xl font-extrabold text-gray-800 text-center p-3 mb-6 bg-gray-50 rounded-lg">
+                <!-- Final answer will be rendered here -->
+            </div>
+
+            <h2 class="text-xl font-bold text-indigo-700 mb-3 border-b pb-2">
+                شرح خطوة بخطوة:
+            </h2>
+            <!-- Explanation will be rendered here (MathJax will process $...$ notation) -->
+            <div id="steps-output" class="markdown-output text-gray-700"></div>
+        </div>
+
+        <!-- Error/Message Display -->
+        <div id="message-box" class="mt-4 p-4 text-red-700 rounded-lg hidden" role="alert">
+            <p id="message-text" class="font-medium"></p>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Configuration and Environment Setup ---
+        const apiKey = ""; 
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+        /**
+         * Utility function to display messages to the user
+         */
+        function showMessage(text, classes) {
+            const messageBox = document.getElementById('message-box');
+            const messageText = document.getElementById('message-text');
+            messageText.textContent = text;
+            messageBox.className = `mt-4 p-4 rounded-lg ${classes} text-right`; // Added text-right for RTL
+            messageBox.classList.remove('hidden');
+        }
+        
+        function hideMessage() {
+            document.getElementById('message-box').classList.add('hidden');
+        }
+
+        function hideResult() {
+            document.getElementById('result-box').classList.add('hidden');
+        }
+
+        /**
+         * Cleans up the Markdown output for display (removes common markdown artifacts).
+         */
+        function formatMarkdown(text) {
+            // Simple removal of common Markdown block indicators like ```json or ```markdown
+            let cleanedText = text.replace(/```(json|markdown|text|)\n/g, '').replace(/```/g, '');
+            // Convert newline characters to <br> for basic formatting (MathJax handles the math)
+            cleanedText = cleanedText.replace(/\n/g, '<br>');
+            return cleanedText;
+        }
+
+        /**
+         * Solves the equation and explains the steps using the Gemini API (Text Generation).
+         */
+        async function solveAndExplain() {
+            const query = document.getElementById('math-query').value.trim();
+            if (!query) {
+                showMessage('الرجاء إدخال مسألة رياضية للحل.', 'bg-yellow-100 border-yellow-400 text-yellow-700');
+                return;
+            }
+
+            hideMessage();
+            hideResult();
+            document.getElementById('loading-indicator').classList.remove('hidden');
+            document.getElementById('solve-button').disabled = true;
+
+            // Updated system prompt to explicitly support Arabic and English
+            const systemPrompt = "You are a patient and expert math tutor who can respond fluently in both English and Arabic. Your task is to solve the user's mathematical query and provide a clear, step-by-step explanation. If the user's query is primarily in Arabic, respond entirely in Arabic; otherwise, respond in English. The final answer must be structured as a single JSON object with two fields: 'solution' (the final answer, with units or variables if needed, using MathJax $...$ notation) and 'steps' (a clear, easy-to-read, step-by-step explanation in Markdown format. Use single dollar signs $...$ for inline math and double dollar signs $$...$$ for display math).";
+            
+            const payload = {
+                contents: [{ parts: [{ text: query }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "solution": { "type": "STRING", "description": "The final numerical or algebraic answer, formatted using MathJax (e.g., $x=5$ or $y=2x+1$)." },
+                            "steps": { "type": "STRING", "description": "A detailed, step-by-step explanation using clear Markdown and MathJax notation." }
+                        }
+                    }
+                }
+            };
+
+            let maxRetries = 3;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API Request failed (Status: ${response.status})`);
+                    }
+
+                    const result = await response.json();
+                    
+                    const jsonString = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (!jsonString) {
+                         throw new Error("AI returned an empty or malformed response.");
+                    }
+                    
+                    const parsedJson = JSON.parse(jsonString);
+                    const solution = parsedJson.solution || "غير متوفر";
+                    const steps = parsedJson.steps || "لم يتمكن الذكاء الاصطناعي من إنشاء الخطوات.";
+
+                    // 1. Display Solution
+                    document.getElementById('solution-output').innerHTML = solution;
+                    
+                    // 2. Display Steps (after converting Markdown to HTML for display)
+                    document.getElementById('steps-output').innerHTML = formatMarkdown(steps);
+
+                    document.getElementById('result-box').classList.remove('hidden');
+                    showMessage('نجاح! تم إنشاء الحل والخطوات.', 'bg-green-100 border-green-400 text-green-700');
+                    
+                    // 3. Rerender MathJax to display the new equations
+                    if (window.MathJax) {
+                        MathJax.typesetPromise([document.getElementById('result-box')]).catch((err) => console.error('MathJax render error:', err));
+                    }
+
+                    return; // Success, exit function
+
+                } catch (error) {
+                    console.error(`Attempt ${attempt + 1} failed:`, error.message);
+                    if (attempt === maxRetries - 1) {
+                        let finalMessage = `خطأ نهائي بعد ${maxRetries} محاولات. فشل في الحصول على الحل. يرجى التحقق من استفسارك أو الشبكة. تفاصيل الخطأ: ${error.message.substring(0, 100)}...`;
+                        showMessage(finalMessage, 'bg-red-100 border-red-400 text-red-700');
+                    } else {
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                } finally {
+                    if (attempt === maxRetries - 1) {
+                        document.getElementById('loading-indicator').classList.add('hidden');
+                        document.getElementById('solve-button').disabled = false;
+                    }
+                }
+            }
+        }
+
+        // Initialize the app state on load
+        document.addEventListener('DOMContentLoaded', () => {
+            hideMessage();
+            hideResult();
+        });
+    </script>
+</body>
+</html>
